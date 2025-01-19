@@ -432,6 +432,9 @@ class Hexo extends EventEmitter {
     require('../plugins/renderer')(this);
     require('../plugins/tag').default(this);
 
+    //
+    require('../plugins/image')(this);
+
     // Load config
     return Promise.each([
       'update_package', // Update package.json

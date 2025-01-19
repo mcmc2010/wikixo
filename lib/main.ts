@@ -1,12 +1,10 @@
 
 
 import Path from "path"
-import Builder from "./generate";
+import Generate from "./generator";
 
 
-//const ROOT_PATH = "www";
-//const base_dir = Path.resolve(`${__dirname}/../`, `${ROOT_PATH}`);
-//const root_dir = Path.resolve(`${__dirname}/../`, ``);
+//process.argv = process.argv.concat([ "--new" , "--filename", "1.md"]);
 
-//Generate(base_dir, root_dir, true);
-Builder();
+//
+Generate();

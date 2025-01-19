@@ -3,5 +3,5 @@
 'use strict';
 
 //
-const Builder = require('../dist/generate');
-Builder.default();
+const Generator = require('../dist/generator');
+Generator.generate();

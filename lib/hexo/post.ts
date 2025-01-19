@@ -266,10 +266,19 @@ class Post {
         args: [replace],
         context: ctx
       }),
-      this._renderScaffold(data)
-    ]).spread((path, content) => {
+      // Content
+      this._renderScaffold(data),
+      function () { 
+        if(!data.path) { return ""; }
+        return readFile(data.path);
+      }()
+    ]).spread((path, content, text) => {
       const result = { path, content };
-
+      if(text.length > 0)
+      {
+        content = text;
+        result.content = text;
+      }
       return Promise.all<void, void | string>([
         // Write content to file
         writeFile(path, content),

@@ -3,54 +3,5 @@
 'use strict';
 
 //
-const Path = require('path');
-const Koa = require('koa');
-const KoaLogger = require('koa-logger');
-const KoaRouter = require('koa-router');
-const KoaStaticPath = require('koa-static');
-
-const ROOT_PATH = "www";
-const HTTP_PORT = 4000;
-
-//
-let app = null;
-let router = null;
-let http_server = null;
-
-
-//
-function start_server()
-{
-    app = new Koa();
-    router = new KoaRouter();
-
-    //
-    const public_dir = Path.resolve(`${__dirname}/../`, `${ROOT_PATH}/public`);
-
-    // 使用 koa-logger 中间件
-    app.use(KoaLogger());
-
-    //
-    app.use(KoaStaticPath(public_dir));
-    console.log(`Server Root : ${public_dir}`);
-
-    app.use(router.routes());
-    app.use(router.allowedMethods());
-
-    // 启动 Koa 服务
-    http_server = app.listen(HTTP_PORT, () => {
-        //
-        console.log(`Server is running at http://localhost:${HTTP_PORT}`);
-    
-    });
-}
-
-
-//
-function main()
-{
-    start_server();
-}
-
-//
-main()
+const server = require('../dist/server');
+server();

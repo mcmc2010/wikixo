@@ -1,4 +1,4 @@
-import { join, extname } from 'path';
+import { join, extname, isAbsolute, basename } from 'path';
 import moment from 'moment';
 import Promise from 'bluebird';
 import { createSha1Hash, Permalink } from 'hexo-util';
@@ -44,7 +44,15 @@ function newPostPathFilter(this: Hexo, data: PostSchema = {}, replace?: boolean)
         break;
 
       default:
-        target = join(postDir, path);
+        {
+          // 是绝对路径不再组合路径
+          target = join(postDir, path);
+          if(isAbsolute(path)) {
+            target = join(postDir, basename(path));
+          }
+          
+          break;
+        }
     }
   } else if (slug) {
     switch (layout) {
