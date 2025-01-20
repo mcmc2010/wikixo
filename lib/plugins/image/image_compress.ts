@@ -1,6 +1,6 @@
 
 //
-import FS from "fs";
+import FS, { writeFileSync } from "fs";
 import Path from "path";
 import Crypto from "crypto";
 import CRC from "crc";
@@ -88,8 +88,8 @@ function LoadFileIndexes(ctx: Hexo, filename:string) : any {
     {
 
         if (!FS.existsSync(filename)) {
-            let text = JSON.stringify(indexes_data);
-            FS.writeFileSync(filename, text);
+            let text = JSON.stringify(indexes_data, null, "\t");
+            FS.writeFileSync(filename, text, "utf-8");
         }
         else
         {
@@ -111,9 +111,35 @@ function LoadFileIndexes(ctx: Hexo, filename:string) : any {
     return indexes_data;
 }
 
+///
+function SaveFileIndexes(ctx: Hexo, filename:string, data:any = null) : any {
+
+    //
+    let indexes_data = {
+        items:[
+
+        ]
+    };
+
+    if(!data)
+    {
+        data = indexes_data;
+    }
+
+    try
+    {
+        let text = JSON.stringify(data, null, "\t");
+        FS.writeFileSync(filename, text, "utf-8");
+
+    } catch (e) {
+        ctx.log.error({e}, 'Save indexes failed: %s', filename);
+    }
+
+    return indexes_data;
+}
 
 ////
-async function ImageCompressFile(ctx: Hexo, input_filename:string, output_filename:string, quality = 0.8)
+async function ImageCompressOneFile(ctx: Hexo, input_filename:string, output_filename:string, quality = 0.8)
 {
     try
     {
@@ -122,20 +148,97 @@ async function ImageCompressFile(ctx: Hexo, input_filename:string, output_filena
             return false;
         }
 
-        let files = Imagemin([input_filename], {
-        destination: output_filename,
-        plugins: [
-          ImageminWebp({ quality: quality * 100 }),
-          ImageminMozjpeg({ quality: quality * 100 }),
-          ImageminPngquant({ quality: [0.6, quality] })
-        ]
-      });
+        let files = await Imagemin([input_filename], {
+            glob: false,
+            plugins: [
+                ImageminWebp({ quality: quality * 100 }),
+                //ImageminMozjpeg({ quality: quality * 100 }),
+                //ImageminPngquant({ quality: [0.6, quality] })
+            ]
+        });
 
+        if (files.length > 0 && files[0].data)
+        {
+            FS.writeFileSync(output_filename, files[0].data);
+        }
     } catch (e) {
-        ctx.log.error({e}, 'Image Compress failed: %s', input_filename);
+        ctx.log.error({e}, 'Image Compress failed: %s, Error:%s', input_filename, e.message);
     }
 
     return true;
+}
+
+///
+async function ImageCompressFiles(ctx: Hexo, files:string[], source_dir:string, target_dir:string, indexes:any = null) 
+{
+    if(files.length == 0) {
+        return false;
+    }
+
+    // 定义支持的图像扩展名数组
+    let supported_exts = [".jpg", ".jpeg", ".png", ".webp"];
+    //
+    let now = new Date();
+
+    for(let file of files)
+    {
+        let filename = Path.join(source_dir, file);
+        // 跳过非文件
+        if (!FS.statSync(filename).isFile()) {
+            continue;
+        }
+
+        let dirname = Path.dirname(filename);
+        let basename = Path.basename(filename, Path.extname(filename));
+        let ext = Path.extname(filename).toLowerCase();
+        // 检查扩展名是否在支持的扩展名数组中
+        if (!supported_exts.includes(ext)) {
+            continue;
+        }
+
+        if(ext == ".jpeg") { ext = ".jpg" }
+
+        //
+        let text = Path.join(dirname, `${basename}${ext}`);
+        let hash_name = CRC32(text);
+        let new_filename = `${hash_name}${ext}`;
+
+        let hash = HashMD5File(filename);
+
+        let item_data = {   
+            index : hash_name,
+            filename : new_filename,
+            pathname : encodeURI(filename),
+            hash: hash.hash,
+            length: hash.length,
+            datetime: now.toISOString(),
+        };
+
+        new_filename = `${hash_name}.webp`;
+
+        if(indexes != null)
+        {
+            let index = indexes.items.findIndex(item => item.index === hash_name);
+            if(index < 0)
+            {
+                indexes.items.push(item_data);
+            }
+            else if(indexes.items[index].hash != hash)
+            {
+                indexes.items[index] = item_data;
+            }
+            else
+            {
+                continue;
+            }
+        }
+
+        ctx.log.info(`Image : (Compress) ${filename} -> ${new_filename}`)
+        
+        new_filename = Path.join(target_dir, new_filename);
+
+        await ImageCompressOneFile(ctx, filename, new_filename);
+    }
 }
 
 // 
@@ -166,59 +269,8 @@ module.exports = async function ImageCompressFilter (this: Hexo)
     let supported_exts = [".jpg", ".jpeg", ".png", ".webp"];
 
     let files = FS.readdirSync(source_dir);
-    for(let file of files)
-    {
-        let filename = Path.join(source_dir, file);
-        // 跳过非文件
-        if (!FS.statSync(filename).isFile()) {
-            continue;
-        }
+    await ImageCompressFiles(this, files, source_dir, target_dir, indexes_data);
 
-        let dirname = Path.dirname(filename);
-        let basename = Path.basename(filename, Path.extname(filename));
-        let ext = Path.extname(filename).toLowerCase();
-        // 检查扩展名是否在支持的扩展名数组中
-        if (!supported_exts.includes(ext)) {
-            continue;
-        }
-
-        if(ext == ".jpeg") { ext = ".jpg" }
-
-        //
-        let text = Path.join(dirname, `${basename}${ext}`);
-        let hash_name = CRC32(text);
-        let new_filename = `${hash_name}${ext}`;
-
-        let hash = HashMD5File(filename);
-
-        let item_data = {   
-            index : hash_name,
-            filename : encodeURI(filename),
-            hash: hash.hash,
-            length: hash.length,
-            datetime: now.toISOString(),
-        };
-
-        let index = indexes_data.items.findIndex(item => item.index === hash_name);
-        if(index < 0)
-        {
-            indexes_data.items.push(item_data);
-        }
-        else if(indexes_data.items[index].hash != hash)
-        {
-            indexes_data.items[index] = item_data;
-        }
-        else
-        {
-            continue;
-        }
-
-        this.log.info(`Image : (Compress) ${filename} -> ${new_filename}`)
-        
-        new_filename = Path.join(target_dir, new_filename);
-
-        await ImageCompressFile(this, filename, new_filename);
-    }
-
-
+    //
+    SaveFileIndexes(this, indexes_filename, indexes_data);
 }
